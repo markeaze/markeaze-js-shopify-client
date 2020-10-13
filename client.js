@@ -155,9 +155,6 @@ class PageManager {
   }
 }
 
-
-// --------- Service funcs
-
 class IntegrationManager {
 
   static init = () => {
