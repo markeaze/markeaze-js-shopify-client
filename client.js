@@ -1,10 +1,12 @@
+const config = require('./config')
+
 class CartManager {
-  static getCurrentCartItems = async() => {
+  static async getCurrentCartItems () {
     let cart = await this._getShopifyCart()
     return cart.items.map(item => { return CartManager.shopifyCartItemToMarkeazeCartItem(item) })
   }
 
-  static shopifyCartItemToMarkeazeCartItem = (item) => {
+  static shopifyCartItemToMarkeazeCartItem (item) {
     return {
       variant_id: 'gid://shopify/ProductVariant/' + item.variant_id,
       qnt: item.quantity,
@@ -15,7 +17,7 @@ class CartManager {
     }
   }
 
-  static compareAndUpdateCart = (currentCartItems) => {
+  static compareAndUpdateCart (currentCartItems) {
     let prevCartItemsJSON = sessionStorage.getItem('mkz_cart_items') || JSON.stringify([])
     let currentCartItemsJSON = JSON.stringify(currentCartItems)
 
@@ -27,7 +29,7 @@ class CartManager {
     }
   }
 
-  static _getShopifyCart = () => {
+  static _getShopifyCart () {
     return fetch('/cart.js')
       .then(function(response) {
         return response.json()
@@ -39,7 +41,7 @@ class CartManager {
 }
 
 class EventManager {
-  static trackPageView = async() => {
+  static async trackPageView () {
     let eventPayload = {}
     const meta = PageManager.getPageMeta()
 
@@ -77,13 +79,13 @@ class EventManager {
     }
   }
 
-  static trackCartUpdate = (items) => {
+  static trackCartUpdate (items) {
     mkz('trackCartUpdate', {items: items})
   }
 
   // private
 
-  static _getQueryStringValue = (key) => {
+  static _getQueryStringValue (key) {
     return decodeURIComponent(window.location.search.replace(new RegExp("^(?:.*[&\\?]" + encodeURIComponent(key).replace(/[\.\+\*]/g, "\\$&") + "(?:\\=([^&]*))?)?.*$", "i"), "$1"));
   }
 
@@ -91,7 +93,7 @@ class EventManager {
 
 class PageManager {
 
-  static getSelectedVariant = (currentResource) => {
+  static getSelectedVariant (currentResource) {
     let selectedVariant
     let selectedVariantId = this._getSelectedVariantId(meta.page)
 
@@ -107,13 +109,13 @@ class PageManager {
     return selectedVariant
   }
 
-  static getPageMeta = () => {
+  static getPageMeta () {
     if (typeof window.ShopifyAnalytics !== 'undefined') {
       return window.ShopifyAnalytics.meta
     }
   }
 
-  static getCurrentResourceInfo = () => {
+  static getCurrentResourceInfo () {
     return fetch(window.location.pathname + '.json')
       .then(function(response) {
         return response.json()
@@ -125,15 +127,15 @@ class PageManager {
 
   // private
 
-  static _getSelectedVariantId = (page_meta) => {
+  static _getSelectedVariantId (page_meta) {
     return page_meta.selectedVariantId || IntegrationManager.getQueryParam(window.location.href, 'variant')
   }
 
-  static _getProductVariantInfo = (variants, variantId) => {
+  static _getProductVariantInfo (variants, variantId) {
     return variants.find( v => v.id == parseInt(variantId) )
   }
 
-  static _getCanonicalUrl = () => {
+  static _getCanonicalUrl () {
     // 1. Try to get 'og:url' tag content
     const metaTags  = document.getElementsByTagName('meta')
     for (let i = 0; i < metaTags.length; i++) {
@@ -157,7 +159,10 @@ class PageManager {
 
 class IntegrationManager {
 
-  static init = () => {
+  static init () {
+
+    // Markeaze won't work in very old browsers
+    if (!window.sessionStorage) return
 
     // Get Markeaze Account App Key from current script src
     if (typeof document.currentScript !== 'undefined') {
@@ -172,34 +177,38 @@ class IntegrationManager {
 
     if (typeof appKey === 'undefined') {
       console.error('[Markeaze]', 'Could not be initialized: no `app_key` param found in query URL for current script.')
-    } else {
-      this._createMarkeazePixel()
-      this._loadMarkeazeJSTracker(this._initMarkeazePixel(appKey))
+      return
     }
 
-    /**
-      Listen to all AJAX requests and it a response object has `items` attribute
-      then it was likely a cart update request.
-    */
-    $.ajaxSetup({
-      success: (response) => {
-        if (typeof response.items !== 'undefined') {
-          let newCartItems = response.items.map(item => {
-            return CartManager.shopifyCartItemToMarkeazeCartItem(item)
-          })
-
-          CartManager.compareAndUpdateCart(newCartItems)
-        }
-      }
-    })
+    this._createMarkeazePixel()
+    this._loadMarkeazeJSTracker(this._initMarkeazePixel(appKey))
+    this._initWatchURL()
   }
 
-  static getQueryParam = (url, name) => {
+  static _addXMLRequestCallback (callback) {
+    var oldSend, i;
+    if ( XMLHttpRequest.callbacks ) {
+      XMLHttpRequest.callbacks.push( callback );
+    } else {
+      XMLHttpRequest.callbacks = [callback];
+      oldSend = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.send = function() {
+        oldSend.apply(this, arguments);
+        this.onreadystatechange = function ( progress ) {
+          for ( i = 0; i < XMLHttpRequest.callbacks.length; i++ ) {
+            XMLHttpRequest.callbacks[i]( progress );
+          }
+        };
+      }
+    }
+  }
+
+  static getQueryParam (url, name) {
     let urlParams = (new URL(url)).searchParams
     return urlParams.get(name)
   }
 
-  static setQueryParam = (url, name, value) => {
+  static setQueryParam (url, name, value) {
     let urlObj = (new URL(url))
     urlObj.searchParams.set(name, value)
     return urlObj.toString()
@@ -208,9 +217,9 @@ class IntegrationManager {
   // private
 
   // Load external script with callback
-  static _loadMarkeazeJSTracker = (callback) => {
+  static _loadMarkeazeJSTracker (callback) {
     let script = document.createElement('script')
-    script.setAttribute('src', 'https://cdn.jsdelivr.net/gh/markeaze/markeaze-js-tracker@latest/dist/mkz.js')
+    script.setAttribute('src', config.scriptUrl)
     script.setAttribute('type', 'text/javascript')
     script.charset = 'utf-8'
     script.async = true
@@ -219,7 +228,7 @@ class IntegrationManager {
     document.body.appendChild(script)
   }
 
-  static _createMarkeazePixel = () => {
+  static _createMarkeazePixel () {
     (function(w,d,c,h) {
       w[c] = w[c] || function() {
           (w[c].q = w[c].q || []
@@ -228,7 +237,7 @@ class IntegrationManager {
     })(window, document, 'mkz')
   }
 
-  static _initMarkeazePixel = async(appKey) => {
+  static async _initMarkeazePixel (appKey) {
     // Set `mkz` cookie if not present as Shopify's customer uniq token
     mkz('setDeviceUid', ShopifyAnalytics.lib.user().traits().uniqToken, false)
 
@@ -242,13 +251,36 @@ class IntegrationManager {
 
     // Init Markeaze JS
     mkz('appKey', appKey)
-    mkz('debug', true)
-
-    EventManager.trackPageView()
+    if (config.debug) mkz('debug', true)
 
     // Check cart updates initially on page load
     let currentCartItems = await CartManager.getCurrentCartItems()
     CartManager.compareAndUpdateCart(currentCartItems)
+
+    // Listen to all AJAX requests and it a response object has `items` attribute
+    // then it was likely a cart update request.
+    this._addXMLRequestCallback( function( progress ) {
+      if (progress.target.readyState !== 4) return
+      if (!progress.srcElement.responseText) return
+      var json = progress.srcElement.responseText
+      try {
+        var response = JSON.parse(json)
+        if (typeof response.items !== 'undefined') {
+          let newCartItems = response.items.map(item => {
+            return CartManager.shopifyCartItemToMarkeazeCartItem(item)
+          })
+          CartManager.compareAndUpdateCart(newCartItems)
+        }
+      } catch(e) {
+        console.error(e)
+      }
+    });
+  }
+
+  static _initWatchURL () {
+    mkz('watch', 'url.change', () => {
+      EventManager.trackPageView()
+    })
   }
 }
 

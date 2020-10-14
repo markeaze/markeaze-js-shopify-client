@@ -1,0 +1,18 @@
+{
+  "name": "markeaze-js-shopify-client",
+  "version": "0.0.1",
+  "description": "",
+  "main": "./dist/mkz.js",
+  "scripts": {
+    "build": "webpack --mode none"
+  },
+  "author": "Markeaze",
+  "license": "ISC",
+  "dependencies": {
+    "@babel/core": "^7.1.6",
+    "@babel/preset-env": "^7.1.6",
+    "babel-loader": "^8.0.4",
+    "webpack": "^4.25.1",
+    "webpack-cli": "^3.1.1"
+  }
+}
