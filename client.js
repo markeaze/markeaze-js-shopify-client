@@ -6,6 +6,36 @@ class CartManager {
     return cart.items.map(item => { return CartManager.shopifyCartItemToMarkeazeCartItem(item) })
   }
 
+  static async addVariantToCart (variantId, quantity = 1) {
+    // Take integer variant ID from string like this: 'gid://shopify/ProductVariant/36381754720417'
+    if (typeof variantId === 'string' && variantId.includes('/')) {
+      variantId = parseInt(variantId.split("/").pop())
+    }
+
+    let data = {
+      items: [{
+        id: variantId,
+        quantity: quantity
+      }]
+    }
+
+    fetch('/cart/add.js', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    })
+    .then(response => {
+      // EventManager.trackCartAddItem
+      console.log(response.json());
+      // return response.json();
+    })
+    .catch((error) => {
+      console.error('Error:', error);
+    })
+  }
+
   static shopifyCartItemToMarkeazeCartItem (item) {
     return {
       variant_id: 'gid://shopify/ProductVariant/' + item.variant_id,
@@ -28,6 +58,8 @@ class CartManager {
       EventManager.trackCartUpdate(currentCartItems)
     }
   }
+
+  // private
 
   static _getShopifyCart () {
     return fetch('/cart.js')
@@ -81,6 +113,16 @@ class EventManager {
 
   static trackCartUpdate (items) {
     mkz('trackCartUpdate', {items: items})
+  }
+
+  static trackCartAddItem (variantId, quantity, price) {
+    mkz('trackCartAddItem', {
+      item: {
+        variant_id: variantId,
+        qnt: quantity,
+        price: price
+      }
+    })
   }
 
   // private
@@ -238,6 +280,8 @@ class IntegrationManager {
   }
 
   static async _initMarkeazePixel (appKey) {
+    if (config.debug) mkz('debug', true)
+
     // Set `mkz` cookie if not present as Shopify's customer uniq token
     mkz('setDeviceUid', ShopifyAnalytics.lib.user().traits().uniqToken, false)
 
@@ -251,7 +295,6 @@ class IntegrationManager {
 
     // Init Markeaze JS
     mkz('appKey', appKey)
-    if (config.debug) mkz('debug', true)
 
     // Check cart updates initially on page load
     let currentCartItems = await CartManager.getCurrentCartItems()
@@ -259,22 +302,36 @@ class IntegrationManager {
 
     // Listen to all AJAX requests and it a response object has `items` attribute
     // then it was likely a cart update request.
-    this._addXMLRequestCallback( function( progress ) {
-      if (progress.target.readyState !== 4) return
-      if (!progress.srcElement.responseText) return
-      var json = progress.srcElement.responseText
-      try {
-        var response = JSON.parse(json)
-        if (typeof response.items !== 'undefined') {
-          let newCartItems = response.items.map(item => {
-            return CartManager.shopifyCartItemToMarkeazeCartItem(item)
-          })
-          CartManager.compareAndUpdateCart(newCartItems)
+    // this._addXMLRequestCallback( function( progress ) {
+    //   if (progress.target.readyState !== 4) return
+    //   if (!progress.srcElement.responseText) return
+    //   var json = progress.srcElement.responseText
+    //   try {
+    //     var response = JSON.parse(json)
+    //     if (typeof response.items !== 'undefined') {
+    //       let newCartItems = response.items.map(item => {
+    //         return CartManager.shopifyCartItemToMarkeazeCartItem(item)
+    //       })
+    //       CartManager.compareAndUpdateCart(newCartItems)
+    //     }
+    //   } catch(e) {
+    //     console.error(e)
+    //   }
+    // });
+
+    if (typeof window.$ !== 'undefined') {
+      $.ajaxSetup({
+        success: (response) => {
+          if (typeof response.items !== 'undefined') {
+            let newCartItems = response.items.map(item => {
+              return CartManager.shopifyCartItemToMarkeazeCartItem(item)
+            })
+
+            CartManager.compareAndUpdateCart(newCartItems)
+          }
         }
-      } catch(e) {
-        console.error(e)
-      }
-    });
+      })
+    }
   }
 
   static _initWatchURL () {
@@ -284,4 +341,5 @@ class IntegrationManager {
   }
 }
 
+window.mkzCartManager = CartManager
 IntegrationManager.init()
