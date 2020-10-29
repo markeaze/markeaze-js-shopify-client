@@ -6,7 +6,7 @@ class CartManager {
     return cart.items.map(item => { return CartManager.shopifyCartItemToMarkeazeCartItem(item) })
   }
 
-  static async addVariantToCart (variantId, quantity = 1) {
+  static async addVariantToCart (variantId, price, quantity = 1, callback = null) {
     // Take integer variant ID from string like this: 'gid://shopify/ProductVariant/36381754720417'
     if (typeof variantId === 'string' && variantId.includes('/')) {
       variantId = parseInt(variantId.split("/").pop())
@@ -27,9 +27,14 @@ class CartManager {
       body: JSON.stringify(data)
     })
     .then(response => {
-      // EventManager.trackCartAddItem
-      console.log(response.json());
-      // return response.json();
+      EventManager.trackCartAddItem(variantId, quantity, price)
+      this.__updateCurrentCartItems()
+
+      // TODO: change this to await from trackCartAddItem when our
+      // tracker will support this.
+      setTimeout(() => {
+        callback();
+      }, 200)
     })
     .catch((error) => {
       console.error('Error:', error);
@@ -59,6 +64,10 @@ class CartManager {
     }
   }
 
+  static openCartPage () {
+    window.location.href = '/cart';
+  }
+
   // private
 
   static _getShopifyCart () {
@@ -69,6 +78,13 @@ class CartManager {
         console.error('[Markeaze]', 'Failed to get current cart from Shopify:', err)
         return null
       })
+  }
+
+  static async __updateCurrentCartItems () {
+    // Update current cart items in session storage to avoid `cart_update` event
+    // after next page change.
+    let currentCartItems = await this.getCurrentCartItems()
+    sessionStorage.setItem('mkz_cart_items', JSON.stringify(currentCartItems))
   }
 }
 
@@ -299,25 +315,6 @@ class IntegrationManager {
     // Check cart updates initially on page load
     let currentCartItems = await CartManager.getCurrentCartItems()
     CartManager.compareAndUpdateCart(currentCartItems)
-
-    // Listen to all AJAX requests and it a response object has `items` attribute
-    // then it was likely a cart update request.
-    // this._addXMLRequestCallback( function( progress ) {
-    //   if (progress.target.readyState !== 4) return
-    //   if (!progress.srcElement.responseText) return
-    //   var json = progress.srcElement.responseText
-    //   try {
-    //     var response = JSON.parse(json)
-    //     if (typeof response.items !== 'undefined') {
-    //       let newCartItems = response.items.map(item => {
-    //         return CartManager.shopifyCartItemToMarkeazeCartItem(item)
-    //       })
-    //       CartManager.compareAndUpdateCart(newCartItems)
-    //     }
-    //   } catch(e) {
-    //     console.error(e)
-    //   }
-    // });
 
     if (typeof window.$ !== 'undefined') {
       $.ajaxSetup({
