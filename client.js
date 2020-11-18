@@ -2,7 +2,7 @@ const config = require('./config')
 
 class CartManager {
   static async getCurrentCartItems () {
-    let cart = await this._getShopifyCart()
+    const cart = await this._getShopifyCart()
     return cart.items.map(item => { return CartManager.shopifyCartItemToMarkeazeCartItem(item) })
   }
 
@@ -12,7 +12,7 @@ class CartManager {
       variantId = parseInt(variantId.split("/").pop())
     }
 
-    let data = {
+    const data = {
       items: [{
         id: variantId,
         quantity: quantity
@@ -53,8 +53,8 @@ class CartManager {
   }
 
   static compareAndUpdateCart (currentCartItems) {
-    let prevCartItemsJSON = sessionStorage.getItem('mkz_cart_items') || JSON.stringify([])
-    let currentCartItemsJSON = JSON.stringify(currentCartItems)
+    const prevCartItemsJSON = sessionStorage.getItem('mkz_cart_items') || JSON.stringify([])
+    const currentCartItemsJSON = JSON.stringify(currentCartItems)
 
     // Update visitor session Cart
     sessionStorage.setItem('mkz_cart_items', currentCartItemsJSON)
@@ -83,14 +83,14 @@ class CartManager {
   static async __updateCurrentCartItems () {
     // Update current cart items in session storage to avoid `cart_update` event
     // after next page change.
-    let currentCartItems = await this.getCurrentCartItems()
+    const currentCartItems = await this.getCurrentCartItems()
     sessionStorage.setItem('mkz_cart_items', JSON.stringify(currentCartItems))
   }
 }
 
 class EventManager {
   static async trackPageView () {
-    let eventPayload = {}
+    const eventPayload = {}
     const meta = PageManager.getPageMeta()
 
     if (meta.page.pageType == 'searchresults') {
@@ -102,8 +102,8 @@ class EventManager {
     } else {
 
       if (meta.page.pageType == 'product') {
-        let currentResource = await PageManager.getCurrentResourceInfo()
-        let selectedVariant = PageManager.getSelectedVariant(currentResource)
+        const currentResource = await PageManager.getCurrentResourceInfo()
+        const selectedVariant = PageManager.getSelectedVariant(currentResource)
 
         eventPayload.offer = {
           variant_id: 'gid://shopify/ProductVariant/' + selectedVariant.id,
@@ -114,8 +114,8 @@ class EventManager {
       }
 
       if (meta.page.pageType == 'collection' && meta.page.resourceType == 'collection') {
-        let currentResource = await PageManager.getCurrentResourceInfo()
-        let collection = currentResource.collection
+        const currentResource = await PageManager.getCurrentResourceInfo()
+        const collection = currentResource.collection
 
         eventPayload.category = {
           uid: 'gid://shopify/Collection/' + collection.id,
@@ -153,7 +153,7 @@ class PageManager {
 
   static getSelectedVariant (currentResource) {
     let selectedVariant
-    let selectedVariantId = this._getSelectedVariantId(meta.page)
+    const selectedVariantId = this._getSelectedVariantId(meta.page)
 
     // This means that a Product has no Variants (e.g. only one default Variant)
     if (selectedVariantId === null) {
@@ -168,9 +168,7 @@ class PageManager {
   }
 
   static getPageMeta () {
-    if (typeof window.ShopifyAnalytics !== 'undefined') {
-      return window.ShopifyAnalytics.meta
-    }
+    return window.ShopifyAnalytics.meta
   }
 
   static getCurrentResourceInfo () {
@@ -224,14 +222,14 @@ class IntegrationManager {
 
     // Get Markeaze Account App Key from current script src
     if (typeof document.currentScript !== 'undefined') {
-      var src = document.currentScript.src
+      const src = document.currentScript.src
     } else {
       // Hack for IE11
-      var scripts = document.getElementsByTagName('script')
-      var src = scripts[scripts.length - 1].src
+      const scripts = document.getElementsByTagName('script')
+      const src = scripts[scripts.length - 1].src
     }
 
-    let appKey = this.getQueryParam(src, 'app_key')
+    const appKey = this.getQueryParam(src, 'app_key')
 
     if (typeof appKey === 'undefined') {
       console.error('[Markeaze]', 'Could not be initialized: no `app_key` param found in query URL for current script.')
@@ -239,12 +237,14 @@ class IntegrationManager {
     }
 
     this._createMarkeazePixel()
-    this._loadMarkeazeJSTracker(this._initMarkeazePixel(appKey))
-    this._initWatchURL()
+    window.ShopifyAnalytics.lib.ready(() => {
+      this._loadMarkeazeJSTracker(this._initMarkeazePixel(appKey))
+      this._initWatchURL()
+    })
   }
 
   static _addXMLRequestCallback (callback) {
-    var oldSend, i;
+    let oldSend, i;
     if ( XMLHttpRequest.callbacks ) {
       XMLHttpRequest.callbacks.push( callback );
     } else {
@@ -262,12 +262,12 @@ class IntegrationManager {
   }
 
   static getQueryParam (url, name) {
-    let urlParams = (new URL(url)).searchParams
+    const urlParams = (new URL(url)).searchParams
     return urlParams.get(name)
   }
 
   static setQueryParam (url, name, value) {
-    let urlObj = (new URL(url))
+    const urlObj = (new URL(url))
     urlObj.searchParams.set(name, value)
     return urlObj.toString()
   }
@@ -276,7 +276,7 @@ class IntegrationManager {
 
   // Load external script with callback
   static _loadMarkeazeJSTracker (callback) {
-    let script = document.createElement('script')
+    const script = document.createElement('script')
     script.setAttribute('src', config.scriptUrl)
     script.setAttribute('type', 'text/javascript')
     script.charset = 'utf-8'
@@ -302,7 +302,7 @@ class IntegrationManager {
     mkz('setDeviceUid', ShopifyAnalytics.lib.user().traits().uniqToken, false)
 
     // If a Customer is logged in - set their ID
-    let meta = PageManager.getPageMeta()
+    const meta = PageManager.getPageMeta()
     if (typeof meta.page.customerId !== 'undefined') {
       mkz('setVisitorInfo', {
         client_id: meta.page.customerId
@@ -313,14 +313,14 @@ class IntegrationManager {
     mkz('appKey', appKey)
 
     // Check cart updates initially on page load
-    let currentCartItems = await CartManager.getCurrentCartItems()
+    const currentCartItems = await CartManager.getCurrentCartItems()
     CartManager.compareAndUpdateCart(currentCartItems)
 
     if (typeof window.$ !== 'undefined') {
       $.ajaxSetup({
         success: (response) => {
           if (typeof response.items !== 'undefined') {
-            let newCartItems = response.items.map(item => {
+            const newCartItems = response.items.map(item => {
               return CartManager.shopifyCartItemToMarkeazeCartItem(item)
             })
 
