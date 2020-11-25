@@ -9,7 +9,7 @@ class CartManager {
   static async addVariantToCart (variantId, price, quantity = 1, callback = null) {
     // Take integer variant ID from string like this: 'gid://shopify/ProductVariant/36381754720417'
     if (typeof variantId === 'string' && variantId.includes('/')) {
-      variantId = parseInt(variantId.split("/").pop())
+      variantId = parseInt(variantId.split('/').pop())
     }
 
     const data = {
@@ -221,15 +221,8 @@ class IntegrationManager {
     if (!window.sessionStorage) return
 
     // Get Markeaze Account App Key from current script src
-    if (typeof document.currentScript !== 'undefined') {
-      const src = document.currentScript.src
-    } else {
-      // Hack for IE11
-      const scripts = document.getElementsByTagName('script')
-      const src = scripts[scripts.length - 1].src
-    }
-
-    const appKey = this.getQueryParam(src, 'app_key')
+    const script = this.getScript()
+    const appKey = this.getQueryParam(script.src, 'app_key')
 
     if (typeof appKey === 'undefined') {
       console.error('[Markeaze]', 'Could not be initialized: no `app_key` param found in query URL for current script.')
@@ -241,6 +234,16 @@ class IntegrationManager {
       this._loadMarkeazeJSTracker(this._initMarkeazePixel(appKey))
       this._initWatchURL()
     })
+  }
+
+  static getScript () {
+    if (typeof document.currentScript !== 'undefined') {
+      return document.currentScript
+    } else {
+      // Hack for IE11
+      const scripts = document.getElementsByTagName('script')
+      return scripts[scripts.length - 1]
+    }
   }
 
   static _addXMLRequestCallback (callback) {
